@@ -1,0 +1,38 @@
+
+Breakpoint 1, c_closure (L=0x0) at backtrace/backtrace.c:32
+32	    luaL_error(L, "Lua error backtrace for comparison:");
+
+Lua backtrace:
+
+#0  cclosure 0x0 <c_closure> at backtrace/backtrace.c:31 (nupvalues: 1)
+#1  cfunction 0x0 <c_intermediary> at backtrace/backtrace.c:27
+#2  lclosure 0x0 test/backtrace/backtrace.lua:17
+(... tail calls ...)
+#3  lclosure 0x0 test/backtrace/backtrace.lua:3
+#4  lclosure 0x0 test/backtrace/backtrace.lua:11
+#5  lclosure 0x0 [string "-- empty\n-- lines\n--\nfunction lua_string()\n    print(lua_file())\nend\nfunction lua_file() local o <close> = new_close_obj() end"]:7
+#6  lclosure 0x0 [string "-- empty\n-- lines\n--\nfunction lua_string()\n    print(lua_file())\nend\nfunction lua_file() local o <close> = new_close_obj() end"]:4
+
+msgh: Lua error backtrace for comparison:
+stack traceback:
+	[C]: in ?
+	[C]: in function 'lua_c_closure'
+	[C]: in function 'lua_c_intermediary'
+	test/backtrace/backtrace.lua:19: in function 'lua_tail'
+	(...tail calls...)
+	test/backtrace/backtrace.lua:4: in function <test/backtrace/backtrace.lua:3>
+	test/backtrace/backtrace.lua:12: in metamethod 'close'
+	[string "-- empty..."]:7: in function 'lua_file'
+	[string "-- empty..."]:5: in function 'lua_string'
+
+Breakpoint 1, c_closure (L=0x0) at backtrace/backtrace.c:32
+32	    luaL_error(L, "Lua error backtrace for comparison:");
+
+Lua backtrace:
+
+#0  cclosure 0x0 <c_closure> at backtrace/backtrace.c:31 (nupvalues: 1)
+#1  cfunction 0x0 <c_intermediary> at backtrace/backtrace.c:27
+#2  lclosure 0x0 test/backtrace/backtrace.lua:17
+(... tail calls ...)
+#3  lclosure 0x0 test/backtrace/backtrace.lua:3
+#4  lclosure 0x0 test/backtrace/backtrace.lua:11
