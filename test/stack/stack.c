@@ -30,7 +30,11 @@ int main() {
     lua_pushinteger(L, 42);
     lua_pushcclosure(L, c_function, 1);
     lua_getglobal(L, "lua_function");
+#if LUA_VERSION_NUM == 503
+    lua_newuserdata(L, 42);
+#else
     lua_newuserdatauv(L, 42, 43);
+#endif
     lua_pushthread(L);
     lua_close(L);
 }

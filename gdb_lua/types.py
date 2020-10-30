@@ -36,18 +36,13 @@ def tvalue(v): return v['value_']
 def variant(tt): return (tt >> VARIANT_SHIFT) & VARIANT_MASK
 
 def array_cap(l, h):
-    # TODO isrealasize
-    return int(h['alimit'].cast(l.int_t))
+    return int(l.alimit(h).cast(l.int_t))
 def hash_cap(h):
     return 1 << int(h['lsizenode'])
 
-def isinteger(tt):
-    return not variant(tt)
 def is_lua_closure(tt):
     return variant(tt) == VARIANT_LUA_CLOSURE
 def is_light_cfunction(tt):
     return variant(tt) == VARIANT_LIGHT_CFUNCTION
 def is_c_closure(tt):
     return variant(tt) == VARIANT_C_CLOSURE
-
-def toboolean(tt): return bool(variant(tt))

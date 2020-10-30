@@ -2,9 +2,7 @@ gdb_lua
 =======
 
 A set of custom GDB commands that are useful when working with Lua programs.
-Tested with Lua versions `5.4.0` and `5.4.1`.  The internal structures have
-changed significantly from previous versions, including `5.3`, this script will
-not work with those.
+Tested with Lua versions `5.3.6`, `5.4.0`, and `5.4.1`.
 
 Usage
 -----
@@ -26,3 +24,29 @@ lua stack -- Print the values on the stack associated with a Lua state.
 ```
 
 See the [test](./test) directory for samples of each command.
+
+Versions
+--------
+
+Here is a short description of the relevant differences between versions which
+are handled by this extension, for documentation purposes.  See the subclasses
+of `Lua` in [`lua.py`][[lua.py] for the implementation.
+
+The lowest version supported is 5.3.6, which understandably differs
+significantly from the 5.4 versions in its internal implementation:
+
+- The stack (`StkId`) is a simple array of `TValue` pointers.  In 5.4, it
+  becomes a more complex structure to support to-be-closed variables.
+- Boolean values had a dedicated `int` field in `union Value`.  In 5.4, they
+  become a variant of the `TBOOLEAN` type.
+- Integer and float numbers are variants `0` and `1` respectively of the
+  `TNUMBER` type.  In 5.4, these values are reversed.
+- String and user data content follows the `struct TString` and `struct Udata`
+  objects in memory.  In 5.4, the trailing flexible array C idiom is used.
+- Table array sizes are indicated by the `sizearray` member of `struct Table`.
+  In 5.4, it becomes a more complex calculation based on the `flags` and
+  `alimit` members (this extension just uses the `alimit` directly, meaning it
+  may overestimate the size of the array part).
+- 5.4 introduces user data up-values.
+
+[lua.py]: ./gdb_lua/lua.py

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MAKE="make --jobs"
-VERSIONS=(5.4.0 5.4.1)
+VERSIONS=(5.3.6 5.4.0 5.4.1)
 TESTS=(stack)
 
 main() {

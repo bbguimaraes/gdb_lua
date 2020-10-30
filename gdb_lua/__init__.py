@@ -16,7 +16,7 @@ def _make_command(doc, invoke, *args, **kwargs):
     Command()
 
 def _cmd_stack(_0, arg, _1):
-    lua.Lua().dump_stack(gdb.parse_and_eval(arg or 'L'))
+    lua.lua().dump_stack(gdb.parse_and_eval(arg or 'L'))
 
 _make_command(HELP_LUA, None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
 _make_command(

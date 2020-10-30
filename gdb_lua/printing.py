@@ -25,19 +25,19 @@ def _dump_unknown(_, v, _tt):
 def _dump_nil(*_):
     gdb.write('nil')
 
-def _dump_boolean(_, _v, tt):
-    gdb.write(f'{int(types.toboolean(tt))}')
+def _dump_boolean(lua, v, tt):
+    gdb.write(f'{int(lua.toboolean(v, tt))}')
 
 def _dump_lightuserdata(_, v, _tt):
     gdb.write(str(v['p']))
 
-def _dump_number(_, v, tt):
-    if types.isinteger(tt):
+def _dump_number(lua, v, tt):
+    if lua.isinteger(tt):
         return gdb.write(str(v['i']))
     gdb.write(str(v['n']))
 
 def _dump_string(lua, v, _tt):
-    s = lua.gc(v)['ts']['contents'].cast(lua.char_p)
+    s = lua.string_contents(lua.gc(v)['ts'])
     gdb.write('"')
     gdb.write(pipes.quote(s.string()))
     gdb.write('"')
@@ -57,8 +57,8 @@ def _dump_table(lua, v, _tt):
 def _dump_function(lua, v, tt):
     if types.is_c_closure(tt):
         cl = lua.gc(v)['cl']['c']
-        nuv = int(cl['nupvalues'])
-        return gdb.write(f'cclosure {cl["f"]} (nupvalues: {nuv})')
+        f, nuv = cl['f'], int(cl['nupvalues'])
+        return gdb.write(f'cclosure {f} (nupvalues: {nuv})')
     p = v['p']
     if types.is_lua_closure(tt):
         return gdb.write(f'lclosure {p}')
@@ -68,8 +68,11 @@ def _dump_function(lua, v, tt):
 
 def _dump_userdata(lua, v, _tt):
     u = lua.gc(v)['u']
-    uv = u['uv']['uv'].address.cast(lua.void_p)
-    gdb.write(f'{uv} (nuvalue: {u["nuvalue"]}, size: {u["len"]})')
+    uv, nuv = lua.uv(u)
+    gdb.write(f'{uv} (')
+    if nuv:
+        gdb.write(f'nuvalue: {nuv}, ')
+    gdb.write(f'size: {u["len"]})')
 
 def _dump_thread(lua, v, _tt):
     gdb.write(str(lua.gc(v)['th'].address))
