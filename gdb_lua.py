@@ -1,4 +1,5 @@
 #!/bin/env python3
+import itertools
 import sys
 
 import gdb
@@ -12,6 +13,8 @@ Positional arguments (all optional) are:
 - L: the expression identifying the current Lua state (default: `L`)
 - i: the stack index to print (default: all)\
 '''
+
+TTYPE_MASK = 0b1111
 
 LUA_TNIL = 0
 LUA_TBOOLEAN = 1
@@ -41,9 +44,11 @@ class LuaInitializationFailed(Exception): pass
 
 def idx_or_none(v, i): return v[i] if i < len(v) else None
 
-def ttype(v): return v['tt_'] & 0b1111
+def ttype(v): return v['tt_'] & TTYPE_MASK
 def tvalue(v): return v['value_']
 def variant(tt): return (tt >> 4) & 0b11
+def array_cap(l, v): return int(l.alimit(v).cast(l.int_t))
+def hash_cap(v): return 1 << int(v['lsizenode'])
 
 def is_lua_closure(tt): return variant(tt) == 0
 def is_light_cfunction(tt): return variant(tt) == 1
@@ -85,7 +90,7 @@ def iter_array(h, cap):
         yield i, a
         a += 1
 
-def iter_array(h, cap):
+def iter_hash(h, cap):
     n = h['node']
     for _ in range(0, cap):
         yield n
@@ -100,17 +105,61 @@ def make_command(doc, invoke, *args, **kwargs):
         Command.invoke = invoke
     Command()
 
-class TValuePrinter(object):
-    @classmethod
-    def create(cls, val):
-        if str(val.type) == 'TValue':
-            return cls(val)
-
-    def __init__(self, val):
+class Value(object):
+    'Shared implementation of printers for types that contain a `struct Value`.'
+    def __init__(self, val, tt):
         self.val = val
+        self.type = tt
+
+    def display_hint(self):
+        tt = self.type & TTYPE_MASK
+        if tt == LUA_TSTRING:
+            return 'string'
+        elif tt == LUA_TTABLE:
+            return 'map'
 
     def to_string(self):
-        return lua().dump(self.val)
+        return lua().dump(self.val, self.type)
+
+    def children(self):
+        if self.type & TTYPE_MASK != LUA_TTABLE:
+            return ()
+        l = lua()
+        h = l.gc(self.val)['h']
+        cap, hcap = array_cap(l, h), hash_cap(h)
+        hash_kv = l.hash_kv
+        return itertools.chain(
+            itertools.chain.from_iterable(
+                (('', str(i)), ('', x.dereference()))
+                for i, x in iter_array(h, cap)),
+            itertools.chain.from_iterable(
+                (('', x[0]), ('', x[1]))
+                for x in map(hash_kv, iter_hash(h, hcap)) if x))
+
+class TValuePrinter(object):
+    'Printer for tagged values.'
+    @classmethod
+    def create(cls, val):
+        if str(val.type) in ('TValue', 'struct TValue'):
+            return cls(val)
+
+    def __init__(self, val): self.value = Value(tvalue(val), val['tt_'])
+    def display_hint(self): return self.value.display_hint()
+    def to_string(self): return self.value.to_string()
+    def children(self): return self.value.children()
+
+class NodeKeyPrinter(object):
+    'Printer for hash table nodes.'
+    @classmethod
+    def create(cls, val):
+        if str(val.type) in ('NodeKey', 'struct NodeKey'):
+            return cls(val)
+
+    def __init__(self, val): self.value = Value(val['key_val'], val['key_tt'])
+    def display_hint(self): return self.value.display_hint()
+    def to_string(self): return self.value.to_string()
+    def children(self): return self.value.children()
+
 
 class Lua(object):
     def __init__(self):
@@ -125,7 +174,7 @@ class Lua(object):
         self.char_p = gdb.lookup_type('char').pointer()
 
     def gc(self, v):
-        return tvalue(v)['gc'].cast(self.gc_union_p)
+        return v['gc'].cast(self.gc_union_p)
 
     def dump_stack(self, L, i=None):
         if i is not None:
@@ -143,61 +192,60 @@ class Lua(object):
         tt = ttype(val)
         gdb.write(f'{TYPE_NAMES[tt]} {val}\n')
 
-    def dump(self, v):
-        tt = ttype(v)
-        return self._DUMP[min(tt, len(self._DUMP) - 1)](self, v)
+    def dump(self, v, tt):
+        i = min(tt & TTYPE_MASK, len(self._DUMP) - 1)
+        return self._DUMP[i](self, v, tt)
 
-    def _dump_unknown(self, v):
+    def _dump_unknown(self, v, _tt):
         return v
 
     def _dump_nil(*_):
         return 'nil'
 
-    def _dump_boolean(self, v):
-        return str(int(self.toboolean(v)))
+    def _dump_boolean(self, v, tt):
+        return str(int(self.toboolean(v, tt)))
 
-    def _dump_lightuserdata(self, v):
-        return tvalue(v)["p"]
+    def _dump_lightuserdata(self, v, _tt):
+        return v['p']
 
-    def _dump_number(self, v):
-        if self.isinteger(v['tt_']):
-            return tvalue(v)["i"]
-        return tvalue(v)["n"]
+    def _dump_number(self, v, tt):
+        if self.isinteger(tt):
+            return v['i']
+        return v['n']
 
-    def _dump_string(self, v):
+    def _dump_string(self, v, _tt):
         return self.string_contents(self.gc(v)['ts']).cast(self.char_p)
 
-    def _dump_table(self, v):
+    def _dump_table(self, v, _tt):
         return self.dump_table(v)
 
-    def _dump_table(self, v):
+    def _dump_table(self, v, _tt):
         h = self.gc(v)['h']
-        cap = int(self.alimit(h).cast(self.int_t))
+        cap, hcap = array_cap(self, h), hash_cap(h)
         length = sum(1 for _ in iter_array(h, cap))
-        hash_cap = 1 << int(h['lsizenode'])
-        hash_length = sum(
-            1 for x in iter_array(h, hash_cap)
+        hlength = sum(
+            1 for x in iter_hash(h, hcap)
             if ttype(x['i_val']) != LUA_TNIL)
         return (
             f'(array_capacity: {cap}, length: {length},'
-            f' hash_capacity: {hash_cap}, hash_length: {hash_length})')
+            f' hash_capacity: {hcap}, hash_length: {hlength})')
 
-    def _dump_function(self, v):
-        tt = int(v['tt_'])
+    def _dump_function(self, v, tt):
+        tt = int(tt)
         if is_lua_closure(tt):
             return 'lclosure'
         if is_light_cfunction(tt):
-            return f'cfunction {tvalue(v)["p"]}'
+            return f'cfunction {v["p"]}'
         if is_c_closure(tt):
             cl = self.gc(v)['cl']['c']
             return f'cclosure {cl["f"]} (nupvalues: {int(cl["nupvalues"])})'
 
-    def _dump_userdata(self, v):
+    def _dump_userdata(self, v, _tt):
         u = self.gc(v)['u']
         uv, nuv = self.uv(u)
         return f'{uv} ({nuv}size: {u["len"]})'
 
-    def _dump_thread(self, v):
+    def _dump_thread(self, v, _tt):
         return f'{self.gc(v)["th"].address}'
 
     _DUMP = (
@@ -229,10 +277,10 @@ class Lua53(Lua):
 
     def stkid_to_value(self, x):
         return x.dereference()
-    def toboolean(self, x):
-        return tvalue(x)['b']
-    def isinteger(self, x):
-        return bool(variant(x))
+    def toboolean(self, v, _tt):
+        return v['b']
+    def isinteger(self, tt):
+        return bool(variant(tt))
     def string_contents(self, x):
         return self.data_suffix(x.address, self.tstring_size)
     def alimit(self, x):
@@ -241,6 +289,7 @@ class Lua53(Lua):
         return (self.data_suffix(x.address, self.udata_size), '')
     def data_suffix(self, ptr, size):
         return (ptr.cast(self.char_p) + size).cast(self.void_p)
+
     def calc_max_size(self):
         # No good way to find this because the types used for alignment are not
         # present in the debug information.
@@ -251,21 +300,35 @@ class Lua53(Lua):
                     gdb.lookup_type('double'), gdb.lookup_type('long'),
                     self.void_p, *types))
 
+    @staticmethod
+    def hash_kv(n):
+        v = n['i_val']
+        if ttype(v) != LUA_TNIL:
+            return n['i_key']['tvk'], v
+
+
 class Lua54(Lua):
     def stkid_to_value(self, x):
         return x['val']
-    def toboolean(self, x):
-        return bool(variant(x['tt_']))
+    def toboolean(self, _v, tt):
+        return bool(variant(tt))
     def isinteger(self, x):
         return not bool(variant(x))
     def string_contents(self, x):
         return x['contents']
     def alimit(self, x):
         return x['alimit']
+
     def uv(self, x):
         return (
             x["uv"]["uv"].address.cast(self.void_p),
             f'nuvalue: {x["nuvalue"]}, ')
+
+    @staticmethod
+    def hash_kv(n):
+        v = n['i_val']
+        if ttype(v) != LUA_TNIL:
+            return n['u'], v
 
 def lua():
     global G
@@ -284,6 +347,7 @@ def cmd_stack(_, arg, _from_tty):
 
 def register_printers(obj):
     gdb.printing.register_pretty_printer(obj, TValuePrinter.create)
+    gdb.printing.register_pretty_printer(obj, NodeKeyPrinter.create)
 
 if __name__ == '__main__':
     register_printers(gdb.current_objfile())
