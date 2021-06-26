@@ -4,6 +4,8 @@ import gdb
 from . import printing
 from . import types
 
+G = None
+
 def _is_lua_53():
     return gdb.lookup_global_symbol('lua_newuserdatauv') is None
 
@@ -78,6 +80,10 @@ class Lua54(Lua):
         )
 
 def lua():
-    if _is_lua_53():
-        return Lua53()
-    return Lua54()
+    global G
+    if G is None:
+        if _is_lua_53():
+            G = Lua53()
+        else:
+            G = Lua54()
+    return G
