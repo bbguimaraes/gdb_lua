@@ -12,6 +12,7 @@ LUA_TTABLE = 5
 LUA_TFUNCTION = 6
 LUA_TUSERDATA = 7
 LUA_TTHREAD = 8
+
 TYPE_NAMES = (
     'nil',
     'boolean',
@@ -21,7 +22,10 @@ TYPE_NAMES = (
     'table',
     'function',
     'userdata',
-    'thread')
+    'thread',
+)
+
+G = None
 
 class LuaInitializationFailed(Exception): pass
 
@@ -83,7 +87,8 @@ class Lua(object):
     def __init__(self):
         types = list(map(lookup_type, ('lua_State', 'TValue', 'union GCUnion')))
         if not all(types):
-            raise LuaInitializationFailed()
+            raise LuaInitializationFailed(
+                'failed to find types in debugging info')
         self.lua_state, self.tvalue, gc_union = types
         self.gc_union_p = gc_union.pointer()
         self.int_t = gdb.lookup_type('int')
@@ -224,9 +229,13 @@ class Lua54(Lua):
             f'nuvalue: {x["nuvalue"]}, ')
 
 def lua():
-    if is_lua_53():
-        return Lua53()
-    return Lua54()
+    global G
+    if G is None:
+        if is_lua_53():
+            G = Lua53()
+        else:
+            G = Lua54()
+    return G
 
 if __name__ == '__main__':
     make_command(
