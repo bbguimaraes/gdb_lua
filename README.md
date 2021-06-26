@@ -52,5 +52,8 @@ significantly from the 5.4 versions in its internal implementation:
   `alimit` members (this extension just uses the `alimit` directly, meaning it
   may overestimate the size of the array part).
 - 5.4 introduces user data up-values.
+- Hash table nodes are a simple value/key pair of `struct TValue` objects.  In
+  5.4, the key is stored first and its fields are broken up so that other node
+  fields can be packed together with it.
 
 [lua.py]: ./gdb_lua/lua.py

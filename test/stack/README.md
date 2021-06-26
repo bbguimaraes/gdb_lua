@@ -20,10 +20,28 @@ Lua stack:
 5: 0x555555559950 number 42
 6: 0x555555559960 number 3.1415901184082031
 7: 0x555555559970 string "abc"
-8: 0x555555559980 table (array_capacity: 16, length: 16, hash_capacity: 8, hash_length: 7)
+8: 0x555555559980 table (array_capacity: 8, length: 8, hash_capacity: 8, hash_length: 7) = {
+  [1] = 43,
+  [2] = 44,
+  [3] = 45,
+  [4] = 46,
+  [5] = 47,
+  [6] = 48,
+  [7] = 49,
+  [8] = 50,
+  ["C"] = 60,
+  ["D"] = 61,
+  ["A"] = 58,
+  ["B"] = 59,
+  ["G"] = (array_capacity: 0, length: 0, hash_capacity: 1, hash_length: 1) = {
+    ["nested"] = "table"
+  },
+  ["E"] = 62,
+  ["F"] = 63
+}
 9: 0x555555559990 function cfunction 0x555555555229 <c_function>
 10: 0x5555555599a0 function cclosure 0x555555555229 <c_function> (nupvalues: 1)
-11: 0x5555555599b0 userdata 0x55555555ade8 (nuvalue: 43, size: 42)
+11: 0x5555555599b0 userdata 0x55555555aea8 (nuvalue: 43, size: 42)
 12: 0x5555555599c0 thread 0x5555555592a8
 
 Individual indices:
@@ -35,10 +53,28 @@ lightuserdata <c_obj>
 number 42
 number 3.1415901184082031
 string "abc"
-table (array_capacity: 16, length: 16, hash_capacity: 8, hash_length: 7)
+table (array_capacity: 8, length: 8, hash_capacity: 8, hash_length: 7) = {
+  [1] = 43,
+  [2] = 44,
+  [3] = 45,
+  [4] = 46,
+  [5] = 47,
+  [6] = 48,
+  [7] = 49,
+  [8] = 50,
+  ["C"] = 60,
+  ["D"] = 61,
+  ["A"] = 58,
+  ["B"] = 59,
+  ["G"] = (array_capacity: 0, length: 0, hash_capacity: 1, hash_length: 1) = {
+    ["nested"] = "table"
+  },
+  ["E"] = 62,
+  ["F"] = 63
+}
 function cfunction 0x555555555229 <c_function>
 function cclosure 0x555555555229 <c_function> (nupvalues: 1)
-userdata 0x55555555ade8 (nuvalue: 43, size: 42)
+userdata 0x55555555aea8 (nuvalue: 43, size: 42)
 thread 0x5555555592a8
-[Inferior 1 (process 226832) exited normally]
+[Inferior 1 (process 294525) exited normally]
 ```

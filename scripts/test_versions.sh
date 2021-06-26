@@ -69,7 +69,16 @@ exec_tests() {
             echo "$output"
             return "$ret"
         fi
-        colordiff -u "$cmp" - <<< $output
+        # XXX
+        if [[ "$test" == stack ]]; then
+            cmp=$(<$cmp)
+            output=$(perl \
+                -e '$/ = undef; $_ = <>; s/([^,])(\n})/\1,\2/mg; print' \
+                <<< $output)
+            colordiff -u <(sort <<< $cmp) <(sort <<< $output)
+        else
+            colordiff -u "$cmp" - <<< $output
+        fi
     done
 }
 

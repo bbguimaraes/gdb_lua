@@ -79,6 +79,12 @@ class Lua53(Lua):
     def data_suffix(self, ptr, size):
         return (ptr.cast(self.char_p) + size).cast(self.void_p)
 
+    @staticmethod
+    def hash_kv(n):
+        v = n['i_val']
+        if types.ttype(v) != types.LUA_TNIL:
+            return n['i_key']['tvk'], v
+
 class Lua54(Lua):
     def stkid_to_value(self, v):
         return v['val']
@@ -96,6 +102,12 @@ class Lua54(Lua):
             v['uv']['uv'].address.cast(self.void_p),
             v['nuvalue'],
         )
+
+    @staticmethod
+    def hash_kv(n):
+        v = n['i_val']
+        if types.ttype(v) != types.LUA_TNIL:
+            return n['u'], v
 
 def lua():
     global G

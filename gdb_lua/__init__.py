@@ -31,6 +31,7 @@ def _cmd_stack(_, arg, _from_tty):
 
 def _register_printers(obj):
     gdb.printing.register_pretty_printer(obj, printing.TValuePrinter.create)
+    gdb.printing.register_pretty_printer(obj, printing.NodeKeyPrinter.create)
 
 _register_printers(gdb.current_objfile())
 _make_command(HELP_LUA, None, 'lua', gdb.COMMAND_RUNNING, prefix=True)

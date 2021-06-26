@@ -20,12 +20,18 @@ int main() {
         lua_pushinteger(L, 42 + i);
         lua_rawseti(L, -2, i);
     }
-    for(int i = 0; i < 7; ++i) {
+    for(int i = 0; i < 6; ++i) {
         const char c = 'A' + i;
         lua_pushlstring(L, &c, 1);
         lua_pushinteger(L, 42 + 16 + i);
         lua_rawset(L, -3);
     }
+    lua_pushliteral(L, "G");
+    lua_createtable(L, 0, 1);
+    lua_pushliteral(L, "nested");
+    lua_pushliteral(L, "table");
+    lua_rawset(L, -3);
+    lua_rawset(L, -3);
     lua_pushcfunction(L, c_function);
     lua_pushinteger(L, 42);
     lua_pushcclosure(L, c_function, 1);

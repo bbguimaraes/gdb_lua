@@ -11,7 +11,25 @@ Lua stack:
 5: 0x0 number 42
 6: 0x0 number 3.1415901184082031
 7: 0x0 string "abc"
-8: 0x0 table (array_capacity: 8, length: 8, hash_capacity: 8, hash_length: 7)
+8: 0x0 table (array_capacity: 8, length: 8, hash_capacity: 8, hash_length: 7) = {
+  [1] = 43,
+  [2] = 44,
+  [3] = 45,
+  [4] = 46,
+  [5] = 47,
+  [6] = 48,
+  [7] = 49,
+  [8] = 50,
+  ["C"] = 60,
+  ["D"] = 61,
+  ["A"] = 58,
+  ["B"] = 59,
+  ["G"] = (array_capacity: 0, length: 0, hash_capacity: 1, hash_length: 1) = {
+    ["nested"] = "table"
+  },
+  ["E"] = 62,
+  ["F"] = 63,
+}
 9: 0x0 function cfunction 0x0 <c_function> at stack/stack.c:6
 10: 0x0 function cclosure 0x0 <c_function> at stack/stack.c:6 (nupvalues: 1)
 11: 0x0 function lclosure 0x0
@@ -27,7 +45,25 @@ lightuserdata 0x0 <c_obj>
 number 42
 number 3.1415901184082031
 string "abc"
-table (array_capacity: 8, length: 8, hash_capacity: 8, hash_length: 7)
+table (array_capacity: 8, length: 8, hash_capacity: 8, hash_length: 7) = {
+  [1] = 43,
+  [2] = 44,
+  [3] = 45,
+  [4] = 46,
+  [5] = 47,
+  [6] = 48,
+  [7] = 49,
+  [8] = 50,
+  ["C"] = 60,
+  ["D"] = 61,
+  ["A"] = 58,
+  ["B"] = 59,
+  ["G"] = (array_capacity: 0, length: 0, hash_capacity: 1, hash_length: 1) = {
+    ["nested"] = "table"
+  },
+  ["E"] = 62,
+  ["F"] = 63,
+}
 function cfunction 0x0 <c_function> at stack/stack.c:6
 function cclosure 0x0 <c_function> at stack/stack.c:6 (nupvalues: 1)
 function lclosure 0x0
