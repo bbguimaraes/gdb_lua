@@ -3,6 +3,16 @@ import sys
 
 import gdb
 
+HELP_LUA = 'Commands to inspect Lua states.'
+HELP_STACK = '''\
+Prints the values on the stack associated with a Lua state.
+
+Positional arguments (all optional) are:
+
+- L: the expression identifying the current Lua state (default: `L`)
+- i: the stack index to print (default: all)\
+'''
+
 LUA_TNIL = 0
 LUA_TBOOLEAN = 1
 LUA_TLIGHTUSERDATA = 2
@@ -28,6 +38,8 @@ TYPE_NAMES = (
 G = None
 
 class LuaInitializationFailed(Exception): pass
+
+def idx_or_none(v, i): return v[i] if i < len(v) else None
 
 def ttype(v): return v['tt_'] & 0b1111
 def tvalue(v): return v['value_']
@@ -59,6 +71,11 @@ def iter_stack(L):
     while s != t:
         yield s
         s += 1
+
+def stack_idx(L, i):
+    s, t = L['stack'], L['top']
+    if 0 < i and i < t - s:
+        return s + i
 
 def iter_array(h, cap):
     a = h['array']
@@ -110,11 +127,21 @@ class Lua(object):
     def gc(self, v):
         return tvalue(v)['gc'].cast(self.gc_union_p)
 
-    def dump_stack(self, L):
+    def dump_stack(self, L, i=None):
+        if i is not None:
+            return self.dump_stack_idx(L, int(i))
         for i, v in enumerate(iter_stack(L)):
             val = self.stkid_to_value(v)
             tt = ttype(val)
             gdb.write(f'{i + 1}: {v} {TYPE_NAMES[tt]} {val}\n')
+
+    def dump_stack_idx(self, L, i):
+        v = stack_idx(L, i)
+        if v is None:
+            raise Exception(f'invalid stack index: {i}')
+        val = self.stkid_to_value(v)
+        tt = ttype(val)
+        gdb.write(f'{TYPE_NAMES[tt]} {val}\n')
 
     def dump(self, v):
         tt = ttype(v)
@@ -249,15 +276,18 @@ def lua():
             G = Lua54()
     return G
 
+def cmd_stack(_, arg, _from_tty):
+    args = gdb.string_to_argv(arg)
+    lua().dump_stack(
+        gdb.parse_and_eval(idx_or_none(args, 0) or 'L'),
+        idx_or_none(args, 1))
+
 def register_printers(obj):
     gdb.printing.register_pretty_printer(obj, TValuePrinter.create)
 
 if __name__ == '__main__':
     register_printers(gdb.current_objfile())
+    make_command(HELP_LUA, None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
     make_command(
-        'Commands to inspect Lua states.',
-        None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
-    make_command(
-        'Print the values on the stack associated with a Lua state.',
-        lambda _0, arg, *_1: lua().dump_stack(gdb.parse_and_eval(arg or 'L')),
-        'lua stack', gdb.COMMAND_RUNNING, gdb.COMPLETE_EXPRESSION)
+        HELP_STACK, cmd_stack, 'lua stack',
+        gdb.COMMAND_RUNNING, gdb.COMPLETE_EXPRESSION)
