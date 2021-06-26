@@ -83,6 +83,18 @@ def make_command(doc, invoke, *args, **kwargs):
         Command.invoke = invoke
     Command()
 
+class TValuePrinter(object):
+    @classmethod
+    def create(cls, val):
+        if str(val.type) == 'TValue':
+            return cls(val)
+
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        return lua().dump(self.val)
+
 class Lua(object):
     def __init__(self):
         types = list(map(lookup_type, ('lua_State', 'TValue', 'union GCUnion')))
@@ -102,35 +114,36 @@ class Lua(object):
         for i, v in enumerate(iter_stack(L)):
             val = self.stkid_to_value(v)
             tt = ttype(val)
-            gdb.write(f'{i + 1}: {v} {TYPE_NAMES[tt]}')
-            self.DUMP[min(tt, len(self.DUMP) - 1)](self, val)
-            gdb.write('\n')
+            gdb.write(f'{i + 1}: {v} {TYPE_NAMES[tt]} {val}\n')
 
-    def dump_unknown(self, v):
-        gdb.write(f' {v}')
+    def dump(self, v):
+        tt = ttype(v)
+        return self._DUMP[min(tt, len(self._DUMP) - 1)](self, v)
 
-    def dump_nil(*_):
-        pass
+    def _dump_unknown(self, v):
+        return v
 
-    def dump_boolean(self, v):
-        gdb.write(f' {int(self.toboolean(v))}')
+    def _dump_nil(*_):
+        return 'nil'
 
-    def dump_lightuserdata(self, v):
-        gdb.write(f' {tvalue(v)["p"]}')
+    def _dump_boolean(self, v):
+        return str(int(self.toboolean(v)))
 
-    def dump_number(self, v):
+    def _dump_lightuserdata(self, v):
+        return tvalue(v)["p"]
+
+    def _dump_number(self, v):
         if self.isinteger(v['tt_']):
-            return gdb.write(f' {tvalue(v)["i"]}')
-        gdb.write(f' {tvalue(v)["n"]}')
+            return tvalue(v)["i"]
+        return tvalue(v)["n"]
 
-    def dump_string(self, v):
-        s = self.string_contents(self.gc(v)['ts']).cast(self.char_p)
-        gdb.write(f' {s}')
+    def _dump_string(self, v):
+        return self.string_contents(self.gc(v)['ts']).cast(self.char_p)
 
-    def dump_table(self, v):
-        gdb.write(f' {self.dump_table(v)}')
+    def _dump_table(self, v):
+        return self.dump_table(v)
 
-    def dump_table(self, v):
+    def _dump_table(self, v):
         h = self.gc(v)['h']
         cap = int(self.alimit(h).cast(self.int_t))
         length = sum(1 for _ in iter_array(h, cap))
@@ -138,41 +151,40 @@ class Lua(object):
         hash_length = sum(
             1 for x in iter_array(h, hash_cap)
             if ttype(x['i_val']) != LUA_TNIL)
-        s = (
+        return (
             f'(array_capacity: {cap}, length: {length},'
             f' hash_capacity: {hash_cap}, hash_length: {hash_length})')
-        gdb.write(f' {s}')
 
-    def dump_function(self, v):
+    def _dump_function(self, v):
         tt = int(v['tt_'])
         if is_lua_closure(tt):
-            return gdb.write(' lclosure')
+            return 'lclosure'
         if is_light_cfunction(tt):
-            return gdb.write(f' cfunction {tvalue(v)["p"]}')
+            return f'cfunction {tvalue(v)["p"]}'
         if is_c_closure(tt):
             cl = self.gc(v)['cl']['c']
-            return gdb.write(
-                f' cclosure {cl["f"]} (nupvalues: {int(cl["nupvalues"])})')
+            return f'cclosure {cl["f"]} (nupvalues: {int(cl["nupvalues"])})'
 
-    def dump_userdata(self, v):
+    def _dump_userdata(self, v):
         u = self.gc(v)['u']
         uv, nuv = self.uv(u)
-        gdb.write(f' {uv} ({nuv}size: {u["len"]})')
+        return f'{uv} ({nuv}size: {u["len"]})'
 
-    def dump_thread(self, v):
-        gdb.write(f' {self.gc(v)["th"].address}')
+    def _dump_thread(self, v):
+        return f'{self.gc(v)["th"].address}'
 
-    DUMP = (
-        dump_nil,
-        dump_boolean,
-        dump_lightuserdata,
-        dump_number,
-        dump_string,
-        dump_table,
-        dump_function,
-        dump_userdata,
-        dump_thread,
-        dump_unknown)
+    _DUMP = (
+        _dump_nil,
+        _dump_boolean,
+        _dump_lightuserdata,
+        _dump_number,
+        _dump_string,
+        _dump_table,
+        _dump_function,
+        _dump_userdata,
+        _dump_thread,
+        _dump_unknown,
+    )
 
 
 class Lua53(Lua):
@@ -237,7 +249,11 @@ def lua():
             G = Lua54()
     return G
 
+def register_printers(obj):
+    gdb.printing.register_pretty_printer(obj, TValuePrinter.create)
+
 if __name__ == '__main__':
+    register_printers(gdb.current_objfile())
     make_command(
         'Commands to inspect Lua states.',
         None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
