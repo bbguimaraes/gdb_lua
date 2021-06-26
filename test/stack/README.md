@@ -2,10 +2,11 @@ lua stack
 =========
 
 ```
-$ make -C .. && gdb --batch --command stack.gdb stack
-make: Entering directory 'gdb_lua/test'
+$ make -C test
+make: Entering directory 'test'
 cc     stack/stack.c  '-llua -lm' -o stack/stack
-make: Leaving directory 'gdb_lua/test'
+make: Leaving directory 'test'
+$ gdb --batch --command test/stack/stack.gdb test/stack/stack
 Breakpoint 1 at 0x150bc: file lstate.c, line 443.
 
 Breakpoint 1, lua_close (L=0x55555558b2a8) at lstate.c:443
