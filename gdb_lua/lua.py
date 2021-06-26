@@ -9,11 +9,19 @@ G = None
 def _is_lua_53():
     return gdb.lookup_global_symbol('lua_newuserdatauv') is None
 
+def idx_or_none(v, i):
+    return v[i] if i < len(v) else None
+
 def _iter_stack(L):
     s, t = L['stack'] + 1, L['top']
     while s != t:
         yield s
         s += 1
+
+def _stack_idx(L, i):
+    s, t = L['stack'], L['top']
+    if 0 < i and i < t - s:
+        return s + i
 
 class Lua(object):
     def __init__(self):
@@ -28,11 +36,23 @@ class Lua(object):
     def gc(self, v):
         return v['gc'].cast(self.gc_union_p)
 
-    def dump_stack(self, L):
+    def _dump_stack_idx(self, i, v):
+        val = self.stkid_to_value(v)
+        tt = types.ttype(val)
+        gdb.write(f'{types.TYPE_NAMES[tt]} {val}\n')
+
+    def dump_stack_idx(self, L, i):
+        v = _stack_idx(L, i)
+        if v is None:
+            raise Exception(f'invalid stack index: {i}')
+        self._dump_stack_idx(i, v)
+
+    def dump_stack(self, L, i=None):
+        if i is not None:
+            return self.dump_stack_idx(L, int(i))
         for i, v in enumerate(_iter_stack(L)):
-            val = self.stkid_to_value(v)
-            tt = types.ttype(val)
-            gdb.write(f'{i + 1}: {v} {types.TYPE_NAMES[tt]} {val}\n')
+            gdb.write(f'{i + 1}: {v} ')
+            self._dump_stack_idx(i, v)
 
 class Lua53(Lua):
     def __init__(self):

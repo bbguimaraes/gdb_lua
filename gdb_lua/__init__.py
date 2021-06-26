@@ -2,9 +2,17 @@
 import gdb
 
 from . import lua
+from . import printing
 
 HELP_LUA = 'Commands to inspect Lua states.'
-HELP_STACK = 'Prints the values on the stack associated with a Lua state.'
+HELP_STACK = '''\
+Prints the values on the stack associated with a Lua state.
+
+Positional arguments (all optional) are:
+
+- L: the expression identifying the current Lua state (default: `L`)
+- i: the stack index to print (default: all)\
+'''
 
 def _make_command(doc, invoke, *args, **kwargs):
     class Command(gdb.Command):
@@ -15,8 +23,11 @@ def _make_command(doc, invoke, *args, **kwargs):
         Command.invoke = invoke
     Command()
 
-def _cmd_stack(_0, arg, _1):
-    lua.lua().dump_stack(gdb.parse_and_eval(arg or 'L'))
+def _cmd_stack(_, arg, _from_tty):
+    args = gdb.string_to_argv(arg)
+    lua.lua().dump_stack(
+        gdb.parse_and_eval(lua.idx_or_none(args, 0) or 'L'),
+        lua.idx_or_none(args, 1))
 
 def _register_printers(obj):
     gdb.printing.register_pretty_printer(obj, printing.TValuePrinter.create)
