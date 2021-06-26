@@ -18,6 +18,10 @@ def _make_command(doc, invoke, *args, **kwargs):
 def _cmd_stack(_0, arg, _1):
     lua.lua().dump_stack(gdb.parse_and_eval(arg or 'L'))
 
+def _register_printers(obj):
+    gdb.printing.register_pretty_printer(obj, printing.TValuePrinter.create)
+
+_register_printers(gdb.current_objfile())
 _make_command(HELP_LUA, None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
 _make_command(
     HELP_STACK, _cmd_stack, 'lua stack',

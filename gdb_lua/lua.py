@@ -32,9 +32,7 @@ class Lua(object):
         for i, v in enumerate(_iter_stack(L)):
             val = self.stkid_to_value(v)
             tt = types.ttype(val)
-            gdb.write(f'{i + 1}: {v} {types.TYPE_NAMES[tt]} ')
-            printing.dump(self, val['tt_'], val['value_'])
-            gdb.write('\n')
+            gdb.write(f'{i + 1}: {v} {types.TYPE_NAMES[tt]} {val}\n')
 
 class Lua53(Lua):
     def __init__(self):
