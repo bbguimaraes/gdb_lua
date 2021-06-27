@@ -204,12 +204,14 @@ class NodeKeyPrinter(object):
 
 class Lua(object):
     def __init__(self):
-        types = list(map(lookup_type, ('lua_State', 'TValue', 'union GCUnion')))
+        types = list(map(lookup_type, (
+            'lua_State', 'TValue', 'union GCUnion', 'LClosure')))
         if not all(types):
             raise LuaInitializationFailed(
                 'failed to find types in debugging info')
-        self.lua_state, self.tvalue, gc_union = types
+        self.lua_state, self.tvalue, gc_union, lclosure = types
         self.gc_union_p = gc_union.pointer()
+        self.lclosure_p = lclosure.pointer()
         self.int_t = gdb.lookup_type('int')
         self.void_p = gdb.lookup_type('void').pointer()
         self.char_p = gdb.lookup_type('char').pointer()
@@ -284,7 +286,8 @@ class Lua(object):
 
     def _dump_function(self, v: Value, raw_tt: RawTypeTag):
         if is_lua_closure(raw_tt):
-            return 'lclosure'
+            p = v.v.cast(self.lclosure_p)
+            return f'lclosure {p}'
         if is_light_cfunction(raw_tt):
             return f'cfunction {v.v["p"]}'
         if is_c_closure(raw_tt):
