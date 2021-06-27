@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+import typing
+
 import gdb
 
 from . import lua
 from . import printing
+from . import types
 
 HELP_LUA = 'Commands to inspect Lua states.'
 HELP_STACK = '''\
@@ -14,19 +17,23 @@ Positional arguments (all optional) are:
 - i: the stack index to print (default: all)\
 '''
 
-def _make_command(doc, invoke, *args, **kwargs):
+def _make_command(
+    doc: str,
+    invoke: typing.Optional[typing.Callable],
+    *args, **kwargs,
+):
     class Command(gdb.Command):
         def __init__(self):
             super(Command, self).__init__(*args, **kwargs)
     Command.__doc__ = doc
     if invoke:
-        Command.invoke = invoke
+        Command.invoke = invoke # type: ignore
     Command()
 
-def _cmd_stack(_, arg, _from_tty):
+def _cmd_stack(_, arg: str, _from_tty):
     args = gdb.string_to_argv(arg)
     lua.lua().dump_stack(
-        gdb.parse_and_eval(lua.idx_or_none(args, 0) or 'L'),
+        types.LuaState(gdb.parse_and_eval(lua.idx_or_none(args, 0) or 'L')),
         lua.idx_or_none(args, 1))
 
 def _register_printers(obj):

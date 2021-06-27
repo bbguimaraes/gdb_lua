@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
+import typing
+
 import gdb
 
 from . import printing
 from . import types
 
-G = None
+G: typing.Optional['Lua'] = None
 
 def _is_lua_53():
     return gdb.lookup_global_symbol('lua_newuserdatauv') is None
 
-def idx_or_none(v, i):
+def idx_or_none(v: typing.Sequence[typing.Any], i: int):
     return v[i] if i < len(v) else None
 
-def _iter_stack(L):
-    s, t = L['stack'] + 1, L['top']
+def _iter_stack(L: types.LuaState) -> typing.Iterator[types.StkId]:
+    s, t = L.v['stack'] + 1, L.v['top']
     while s != t:
-        yield s
+        yield types.StkId(s)
         s += 1
 
-def _stack_idx(L, i):
-    s, t = L['stack'], L['top']
+def _stack_idx(L: types.LuaState, i: int) -> typing.Optional[types.StkId]:
+    s, t = L.v['stack'], L.v['top']
     if 0 < i and i < t - s:
-        return s + i
+        return types.StkId(s + i)
+    return None
 
 class Lua(object):
     def __init__(self):
@@ -33,25 +36,40 @@ class Lua(object):
         self.void_p = gdb.lookup_type('void').pointer()
         self.char_p = gdb.lookup_type('char').pointer()
 
-    def gc(self, v):
-        return v['gc'].cast(self.gc_union_p)
+    def stkid_to_value(_self, _v: types.StkId) -> types.TValue:
+        raise NotImplementedError()
+    def toboolean(_self, _v, _tt) -> bool: raise NotImplementedError()
+    def isinteger(_self, _tt: types.RawTypeTag) -> bool:
+        raise NotImplementedError()
+    def string_contents(_self, _s: types.TString) -> gdb.Value:
+        raise NotImplementedError()
+    def alimit(self, _h: types.Hash) -> gdb.Value: raise NotImplementedError()
+    def uv(_self, _v: gdb.Value) -> tuple[gdb.Value, typing.Optional[int]]:
+        raise NotImplementedError()
+    @staticmethod
+    def hash_kv(n: types.HashNode) -> typing.Optional[
+        tuple[types.TValue, types.TValue]
+    ]:
+        raise NotImplementedError()
+    def gc(self, v: types.Value) -> types.GC:
+        return types.GC(v.v['gc'].cast(self.gc_union_p))
 
-    def _dump_stack_idx(self, i, v):
+    def _dump_stack_idx(self, i: int, v: types.StkId):
         val = self.stkid_to_value(v)
         tt = types.ttype(val)
-        gdb.write(f'{types.TYPE_NAMES[tt]} {val}\n')
+        gdb.write(f'{types.TYPE_NAMES[tt.v]} {val.v}\n')
 
-    def dump_stack_idx(self, L, i):
+    def dump_stack_idx(self, L: types.LuaState, i: int):
         v = _stack_idx(L, i)
         if v is None:
             raise Exception(f'invalid stack index: {i}')
         self._dump_stack_idx(i, v)
 
-    def dump_stack(self, L, i=None):
+    def dump_stack(self, L: types.LuaState, i: typing.Optional[int]=None):
         if i is not None:
             return self.dump_stack_idx(L, int(i))
         for i, v in enumerate(_iter_stack(L)):
-            gdb.write(f'{i + 1}: {v} ')
+            gdb.write(f'{i + 1}: {v.v} ')
             self._dump_stack_idx(i, v)
 
 class Lua53(Lua):
@@ -63,53 +81,59 @@ class Lua53(Lua):
         self.tstring_size = max(tstring.sizeof, max_align.sizeof)
         self.udata_size = max(udata.sizeof, max_align.sizeof)
 
-    def stkid_to_value(self, v):
-        return v.dereference()
-    def toboolean(self, v, _tt):
-        return v['b']
-    def isinteger(self, tt):
-        return bool(types.variant(tt))
-    def string_contents(self, s):
-        return self.data_suffix(s.address, self.tstring_size) \
+    def stkid_to_value(self, v: types.StkId) -> types.TValue:
+        return types.TValue(v.v.dereference())
+    def toboolean(self, v: types.Value, _tt: types.RawTypeTag) -> bool:
+        return bool(v.v['b'])
+    def isinteger(self, tt: types.RawTypeTag) -> bool:
+        return bool(types.variant(tt).v)
+    def string_contents(self, s: types.TString) -> gdb.Value:
+        return self.data_suffix(s.v.address, self.tstring_size) \
             .cast(self.char_p)
-    def alimit(self, h):
-        return h['sizearray']
-    def uv(self, v):
+    def alimit(self, h: types.Hash) -> gdb.Value:
+        return h.v['sizearray']
+    def uv(self, v: gdb.Value) -> tuple[gdb.Value, typing.Optional[int]]:
         return (self.data_suffix(v.address, self.udata_size), None)
     def data_suffix(self, ptr, size):
         return (ptr.cast(self.char_p) + size).cast(self.void_p)
 
     @staticmethod
-    def hash_kv(n):
-        v = n['i_val']
-        if types.ttype(v) != types.LUA_TNIL:
-            return n['i_key']['tvk'], v
+    def hash_kv(n: types.HashNode) -> typing.Optional[
+        tuple[types.TValue, types.TValue]
+    ]:
+        v = n.value()
+        if not types.is_nil(types.ttype(v)):
+            return types.TValue(n.v['i_key']['tvk']), v
+        return None
 
 class Lua54(Lua):
-    def stkid_to_value(self, v):
-        return v['val']
-    def toboolean(self, _v, tt):
-        return bool(types.variant(tt))
-    def isinteger(self, tt):
-        return not bool(types.variant(tt))
-    def string_contents(self, s):
-        return s['contents'].cast(self.char_p)
-    def alimit(self, h):
+    def stkid_to_value(self, v: types.StkId) -> types.TValue:
+        return types.TValue(v.v['val'])
+    def toboolean(self, _v: types.Value, tt: types.RawTypeTag) -> bool:
+        return bool(types.variant(tt).v)
+    def isinteger(self, tt: types.RawTypeTag) -> bool:
+        return not bool(types.variant(tt).v)
+    def string_contents(self, s: types.TString) -> gdb.Value:
+        return s.v['contents'].cast(self.char_p)
+    def alimit(self, h: types.Hash) -> gdb.Value:
         # TODO isrealasize
-        return h['alimit']
-    def uv(self, v):
+        return h.v['alimit']
+    def uv(self, v: gdb.Value) -> tuple[gdb.Value, typing.Optional[int]]:
         return (
             v['uv']['uv'].address.cast(self.void_p),
-            v['nuvalue'],
+            int(v['nuvalue']),
         )
 
     @staticmethod
-    def hash_kv(n):
-        v = n['i_val']
-        if types.ttype(v) != types.LUA_TNIL:
-            return n['u'], v
+    def hash_kv(n: types.HashNode) -> typing.Optional[
+        tuple[types.TValue, types.TValue]
+    ]:
+        v = n.value()
+        if not types.is_nil(types.ttype(v)):
+            return types.TValue(n.v['u']), v
+        return None
 
-def lua():
+def lua() -> Lua:
     global G
     if G is None:
         if _is_lua_53():
