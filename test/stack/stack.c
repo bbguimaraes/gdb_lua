@@ -7,6 +7,7 @@ int c_function(lua_State *_) {}
 
 int main() {
     lua_State *L = luaL_newstate();
+    luaL_dostring(L, "function lua_function() end");
     lua_pushnil(L);
     lua_pushboolean(L, 0);
     lua_pushboolean(L, 1);
@@ -34,6 +35,7 @@ int main() {
     lua_pushcfunction(L, c_function);
     lua_pushinteger(L, 42);
     lua_pushcclosure(L, c_function, 1);
+    lua_getglobal(L, "lua_function");
 #if LUA_VERSION_NUM == 503
     lua_newuserdata(L, 42);
 #else
