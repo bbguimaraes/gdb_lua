@@ -4,7 +4,7 @@ lua stack
 ```
 $ make -C .. && gdb --batch --command stack.gdb stack
 make: Entering directory 'gdb_lua/test'
-cc     stack/stack.c  '-llua -lm' -o stack/stack
+cc -g    stack/stack.c  '-llua -lm' -o stack/stack
 make: Leaving directory 'gdb_lua/test'
 Breakpoint 1 at 0x150bc: file lstate.c, line 443.
 

@@ -5,6 +5,13 @@ import gdb
 
 from . import types
 
+def _lookup_fn_loc(f):
+    ret = gdb.find_pc_line(int(f))
+    tab, line = ret.symtab, ret.line
+    if tab:
+        return f'at {tab.filename}:{line}'
+    return None
+
 def _iter_array(h, cap):
     a = h['array']
     for i in range(1, cap + 1):
@@ -58,11 +65,15 @@ def _dump_function(lua, v, tt):
     if types.is_c_closure(tt):
         cl = lua.gc(v)['cl']['c']
         f, nuv = cl['f'], int(cl['nupvalues'])
+        if loc := _lookup_fn_loc(f):
+            return gdb.write(f'cclosure {f} {loc} (nupvalues: {nuv})')
         return gdb.write(f'cclosure {f} (nupvalues: {nuv})')
     p = v['p']
     if types.is_lua_closure(tt):
         return gdb.write(f'lclosure {p}')
     if types.is_light_cfunction(tt):
+        if loc := _lookup_fn_loc(p):
+            return gdb.write(f'cfunction {p} {loc}')
         return gdb.write(f'cfunction {p}')
     gdb.write(f'unknown function {p}')
 

@@ -1,3 +1,4 @@
+CFLAGS = -g
 LDLIBS = -llua -lm
 stack/stack: stack/stack.c
 
