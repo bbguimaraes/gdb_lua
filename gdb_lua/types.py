@@ -48,6 +48,7 @@ class StkId(GDBValue): pass
 class TValue(GDBValue): pass
 class Value(GDBValue): pass
 class TString(GDBValue): pass
+class CallStatus(GDBValue): pass
 
 class RawTypeTag(object):
     __slots__ = ('v',)
@@ -67,6 +68,7 @@ class TypeVariant(object):
 class GC(GDBValue):
     def to_string(self) -> TString: return TString(self.v['ts'])
     def to_hash(self) -> 'Hash': return Hash(self.v['h'])
+    def to_lclosure(self) -> gdb.Value: return self.v['cl']['l']
     def to_cclosure(self) -> gdb.Value: return self.v['cl']['c']
     def to_userdata(self) -> gdb.Value: return self.v['u']
     def to_thread(self) -> gdb.Value: return self.v['th']
@@ -81,6 +83,30 @@ class HashNode(GDBValue):
     def key_tt(self) -> RawTypeTag: return RawTypeTag(int(self.v['key_tt']))
     def key_value(self) -> Value: return Value(self.v['key_val'])
     def value(self) -> TValue: return TValue(self.v['i_val'])
+
+class LClosure(GDBValue):
+    def __init__(self, lua: 'lua.Lua', v: Value):
+       self.v = lua.gc(v).to_lclosure()
+
+    def location(self, lua: 'lua.Lua') -> typing.Optional[str]:
+        proto = self.v['p']
+        src = lua.string_contents(
+            TString(proto['source'].dereference())).string()
+        if src and src[0] == '@':
+            ret = src[1:]
+        else:
+            ret = '[string "{}"]'.format(src.replace('\n', '\\n'))
+        line = proto['linedefined']
+        if line == 0:
+            ret += ' in main chunk'
+        else:
+            # TODO getcurrentline
+            ret += ':' + str(line)
+        return ret
+
+class CallInfo(GDBValue):
+    def callstatus(self) -> CallStatus:
+        return CallStatus(self.v['callstatus'])
 
 def tt(v: TValue) -> RawTypeTag: return RawTypeTag(int(v.v['tt_']))
 def ttype(v: TValue) -> TypeTag: return TypeTag(tt(v))

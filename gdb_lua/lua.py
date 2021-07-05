@@ -41,6 +41,27 @@ def _stack_idx(L: types.LuaState, i: int) -> typing.Optional[types.StkId]:
         return types.StkId(s + i)
     return None
 
+def _iter_call_stack(L: types.LuaState) -> typing.Iterator[types.CallInfo]:
+    p, b = L.v['ci'], L.v['base_ci'].address
+    while p != b:
+        yield types.CallInfo(p.dereference())
+        p = p['previous']
+
+def _getfuncname(
+    lua: 'Lua',
+    L: types.LuaState,
+    i: types.CallInfo,
+    tt: types.RawTypeTag,
+    v: types.TValue,
+) -> typing.Optional[str]:
+    if not types.is_lua_closure(tt):
+        return None
+    ret = types.LClosure(lua, types.tvalue(v)).location(lua)
+    if ret is not None:
+        return ret
+    # TODO funcnamefromcode
+    return None
+
 class Lua(object):
     def __init__(self):
         self.lua_state = gdb.lookup_type('lua_State')
@@ -66,6 +87,10 @@ class Lua(object):
         tuple[types.TValue, types.TValue]
     ]:
         raise NotImplementedError()
+    @staticmethod
+    def is_tail(s: types.CallStatus) -> bool:
+        raise NotImplementedError()
+
     def gc(self, v: types.Value) -> types.GC:
         return types.GC(v.v['gc'].cast(self.gc_union_p))
 
@@ -86,6 +111,21 @@ class Lua(object):
         for i, v in enumerate(_iter_stack(L)):
             gdb.write(f'{i + 1}: {v.v} ')
             self._dump_stack_idx(i, v)
+
+    def dump_call_stack(self, L: types.LuaState):
+        l = lua()
+        for i, info in enumerate(_iter_call_stack(L)):
+            if f := types.StkId(info.v['func']):
+                v = l.stkid_to_value(f)
+                tt = types.RawTypeTag(int(v.v['tt_']))
+                gdb.write(f'#{i}  {v.v}')
+                lua_name = _getfuncname(self, L, info, tt, v)
+                if lua_name is not None:
+                    gdb.write(' ')
+                    gdb.write(lua_name)
+                gdb.write('\n')
+            if l.is_tail(info.callstatus()):
+                gdb.write('(... tail calls ...)\n')
 
 class Lua53(Lua):
     def __init__(self):
@@ -111,6 +151,9 @@ class Lua53(Lua):
         return (self.data_suffix(v.address, self.udata_size), None)
     def data_suffix(self, ptr, size):
         return (ptr.cast(self.char_p) + size).cast(self.void_p)
+    @staticmethod
+    def is_tail(s: types.CallStatus) -> bool:
+        return bool(s.v & (1 << 5))
 
     @staticmethod
     def hash_kv(n: types.HashNode) -> typing.Optional[
@@ -133,6 +176,10 @@ class Lua54(Lua):
     def alimit(self, h: types.Hash) -> gdb.Value:
         # TODO isrealasize
         return h.v['alimit']
+    @staticmethod
+    def is_tail(s: types.CallStatus) -> bool:
+        return bool(s.v & (1 << 5))
+
     def uv(self, v: gdb.Value) -> tuple[gdb.Value, typing.Optional[int]]:
         return (
             v['uv']['uv'].address.cast(self.void_p),
@@ -148,6 +195,11 @@ class Lua54(Lua):
             return types.TValue(n.v['u']), v
         return None
 
+class Lua54_le1(Lua54):
+    @staticmethod
+    def is_tail(s: types.CallStatus) -> bool:
+        return bool(s.v & (1 << 4))
+
 def lua() -> Lua:
     global G
     if G is None:
@@ -155,8 +207,11 @@ def lua() -> Lua:
         if v[0] == 5:
             if v[1] == 3:
                 G = Lua53()
-            else:
-                G = Lua54()
+            elif v[1] == 4:
+                if v[2] <= 1:
+                    G = Lua54_le1()
+                else:
+                    G = Lua54()
         if G is None:
             raise types.LuaInitializationFailed(
                 'unsupported Lua version: ' + '.'.join(map(str, v)))

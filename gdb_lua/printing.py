@@ -76,6 +76,21 @@ def _lookup_fn_loc(f: types.CFunction) -> typing.Optional[str]:
         return f'at {tab.filename}:{line}'
     return None
 
+def _getfuncname(
+    lua: 'lua.Lua',
+    L: types.LuaState,
+    i: types.CallInfo,
+    tt: types.RawTypeTag,
+    v: types.TValue,
+) -> typing.Optional[str]:
+    if not types.is_lua_closure(tt):
+        return None
+    ret = types.LClosure(lua, types.tvalue(v)).location(lua)
+    if ret is not None:
+        return ret
+    # TODO funcnamefromcode
+    return None
+
 def _iter_array(h: types.Hash, cap: int) \
     -> typing.Iterator[tuple[int, types.TValue]] \
 :
@@ -92,6 +107,12 @@ def _iter_hash(h: types.Hash, cap: int) -> typing.Iterator[types.HashNode]:
     for _ in range(0, cap):
         yield types.HashNode(n)
         n += 1
+
+def iter_call_stack(L: types.LuaState) -> typing.Iterator[types.CallInfo]:
+    p, b = L.v['ci'], L.v['base_ci'].address
+    while p != b:
+        yield types.CallInfo(p.dereference())
+        p = p['previous']
 
 def _dump_unknown(_, v: types.Value, _tt: types.RawTypeTag):
     return f'{v.v.type} {repr(v.v)}'

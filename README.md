@@ -19,6 +19,7 @@ Commands to inspect Lua states.
 
 List of lua subcommands:
 
+lua bt -- Prints the current call stack associated with a Lua state.
 lua stack -- Print the values on the stack associated with a Lua state.
 …
 ```
@@ -57,6 +58,12 @@ significantly from the 5.4 versions in its internal implementation:
 - Hash table nodes are a simple value/key pair of `struct TValue` objects.  In
   5.4, the key is stored first and its fields are broken up so that other node
   fields can be packed together with it.
+
+The following differences are also handled:
+
+- A tail call is represented in the `callstatus` field of `struct CallInfo`
+  using the fifth least-significant bit in 5.4.0, while every other version
+  (including 5.3.6) uses the sixth.
 
 [lapi.c]: https://github.com/lua/lua/blob/master/lapi.c
 [lua.py]: ./gdb_lua/lua.py

@@ -3,7 +3,7 @@ set -euo pipefail
 
 MAKE="make --jobs"
 VERSIONS=(5.3.6 5.4.0 5.4.1)
-TESTS=(stack)
+TESTS=(backtrace stack)
 
 main() {
     [[ "$#" -lt 1 ]] && usage
