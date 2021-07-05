@@ -1,8 +1,9 @@
 CFLAGS = -g
 LDLIBS = -llua -lm
-all: stack/stack
+all: backtrace/backtrace stack/stack
+backtrace/backtrace: backtrace/backtrace.c
 stack/stack: stack/stack.c
 
 .PHONY: clean
 clean:
-	rm -f stack/stack
+	rm -f backtrace/backtrace stack/stack

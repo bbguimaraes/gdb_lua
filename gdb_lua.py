@@ -15,6 +15,13 @@ Positional arguments (all optional) are:
 - L: the expression identifying the current Lua state (default: `L`)
 - i: the stack index to print (default: all)\
 '''
+HELP_BACKTRACE = '''\
+Prints the current call stack associated with a Lua state.\
+
+Positional arguments (all optional) are:
+
+- L: the expression identifying the current Lua state (default: `L`)
+'''
 
 TTYPE_MASK = 0b1111
 
@@ -57,6 +64,7 @@ class StkId(GDBValue): pass
 class TValue(GDBValue): pass
 class Value(GDBValue): pass
 class TString(GDBValue): pass
+class CallStatus(GDBValue): pass
 
 class RawTypeTag(object):
     __slots__ = ('v',)
@@ -72,6 +80,30 @@ class TypeVariant(object):
     __slots__ = ('v',)
     def __init__(self, tt: RawTypeTag):
         self.v = (tt.v >> 4) & 0b11
+
+class LClosure(GDBValue):
+    def __init__(self, lua: 'Lua', v: 'Value'):
+       self.v = lua.gc(v)['cl']['l']
+
+    def location(self, lua: 'Lua') -> typing.Optional[str]:
+        proto = self.v['p']
+        src = proto['source']
+        src = lua.string_contents(TString(src.dereference())).string()
+        if src[0] == '@':
+            ret = src[1:]
+        else:
+            ret = '[string "{}"]'.format(src.replace('\n', '\\n'))
+        line = proto['linedefined']
+        if line == 0:
+            ret += ' in main chunk'
+        else:
+            # TODO getcurrentline
+            ret += ':' + str(line)
+        return ret
+
+class CallInfo(GDBValue):
+    def callstatus(self) -> CallStatus:
+        return CallStatus(self.v['callstatus'])
 
 def idx_or_none(v: typing.Mapping[int, typing.Any], i: int):
     return v[i] if i < len(v) else None
@@ -112,9 +144,23 @@ def lookup_type(name: str) -> typing.Optional[gdb.Type]:
         gdb.write(f'type "{name}" not found\n', gdb.STDERR)
     return None
 
-def lookup_fn_loc(f: CFunction) -> tuple[str, int]:
-    sym_line = gdb.find_pc_line(int(f.v))
-    return sym_line.symtab.filename, sym_line.line
+def lookup_fn_loc(f: CFunction) -> typing.Optional[str]:
+    ret = gdb.find_pc_line(int(f.v))
+    tab, line = ret.symtab, ret.line
+    if tab:
+        return f'at {tab.filename}:{line}'
+    return None
+
+def getfuncname(
+    lua: 'Lua', L: LuaState, i: CallInfo, v: TValue
+) -> typing.Optional[str]:
+    if not is_lua_closure(RawTypeTag(v.v['tt_'])):
+        return None
+    ret = LClosure(lua, tvalue(v)).location(lua)
+    if ret is not None:
+        return ret
+    # TODO funcnamefromcode
+    return None
 
 def iter_stack(L: LuaState) -> typing.Iterator[StkId]:
     s, t = L.v['stack'] + 1, L.v['top']
@@ -141,6 +187,14 @@ def iter_hash(h: Hash, cap: int) -> typing.Iterator[HashNode]:
     for _ in range(0, cap):
         yield HashNode(n)
         n += 1
+
+def iter_call_stack(L: LuaState) -> typing.Iterator[CallInfo]:
+    p, b = L.v['ci'], L.v['base_ci'].address
+    while True:
+        yield CallInfo(p.dereference())
+        p = p['previous']
+        if p == b:
+            return
 
 def make_command(
     doc: str,
@@ -245,6 +299,9 @@ class Lua(object):
     @staticmethod
     def hash_kv(n: HashNode) -> tuple[TValue, TValue]:
         raise NotImplementedError()
+    @staticmethod
+    def is_tail(s: CallStatus) -> bool:
+        raise NotImplementedError()
 
     def gc(self, v: Value):
         return v.v['gc'].cast(self.gc_union_p)
@@ -264,6 +321,21 @@ class Lua(object):
         val = self.stkid_to_value(v)
         tt = ttype(val)
         gdb.write(f'{TYPE_NAMES[tt.v]} {val.v}\n')
+
+    def dump_call_stack(self, L: LuaState):
+        l = lua()
+        for i, info in enumerate(iter_call_stack(L)):
+            if f := StkId(info.v['func']):
+                v = l.stkid_to_value(f)
+                tt = RawTypeTag(v.v['tt_'])
+                gdb.write(f'#{i}  {v.v}')
+                lua_name = getfuncname(self, L, info, v)
+                if lua_name is not None:
+                    gdb.write(' ')
+                    gdb.write(lua_name)
+            gdb.write('\n')
+            if l.is_tail(info.callstatus()):
+                gdb.write('(... tail calls ...)\n')
 
     def dump(self, v: Value, tt: RawTypeTag):
         i = min(TypeTag(tt).v, len(self._DUMP) - 1)
@@ -365,6 +437,9 @@ class Lua53(Lua):
         return (self.data_suffix(v.address, self.udata_size), '')
     def data_suffix(self, ptr, size):
         return (ptr.cast(self.char_p) + size).cast(self.void_p)
+    @staticmethod
+    def is_tail(s: CallStatus) -> bool:
+        return bool(s.v & (1 << 5))
 
     def calc_max_align(self):
         # No good way to find this because the types used for alignment are not
@@ -395,6 +470,9 @@ class Lua54(Lua):
         return s.v['contents'].dereference().address
     def alimit(self, h: Hash) -> gdb.Value:
         return h.v['alimit']
+    @staticmethod
+    def is_tail(s: CallStatus) -> bool:
+        return bool(s.v & (1 << 5))
 
     def uv(self, v: gdb.Value) -> tuple[gdb.Value, str]:
         return (
@@ -406,6 +484,11 @@ class Lua54(Lua):
         v = n.v['i_val']
         if ttype(TValue(v)).v != LUA_TNIL:
             return n.v['u'], v
+
+class Lua54_le1(Lua54):
+    @staticmethod
+    def is_tail(s: CallStatus) -> bool:
+        return bool(s.v & (1 << 4))
 
 def lua() -> Lua:
     global G
@@ -430,6 +513,11 @@ def cmd_stack(_, arg: str, _from_tty):
         LuaState(gdb.parse_and_eval(idx_or_none(args, 0) or 'L')),
         idx_or_none(args, 1))
 
+def cmd_backtrace(_, arg: str, _from_tty):
+    args = gdb.string_to_argv(arg)
+    lua().dump_call_stack(
+        LuaState(gdb.parse_and_eval(idx_or_none(args, 0) or 'L')))
+
 def register_printers(obj):
     gdb.printing.register_pretty_printer(obj, TValuePrinter.create)
     gdb.printing.register_pretty_printer(obj, NodeKeyPrinter.create)
@@ -439,4 +527,7 @@ if __name__ == '__main__':
     make_command(HELP_LUA, None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
     make_command(
         HELP_STACK, cmd_stack, 'lua stack',
-        gdb.COMMAND_RUNNING, gdb.COMPLETE_EXPRESSION)
+        gdb.COMMAND_DATA, gdb.COMPLETE_EXPRESSION)
+    make_command(
+        HELP_BACKTRACE, cmd_backtrace, 'lua bt',
+        gdb.COMMAND_STACK, gdb.COMPLETE_EXPRESSION)

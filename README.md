@@ -19,6 +19,7 @@ Commands to inspect Lua states.
 
 List of lua subcommands:
 
+lua bt -- Prints the current call stack associated with a Lua state.
 lua stack -- Print the values on the stack associated with a Lua state.
 …
 ```
