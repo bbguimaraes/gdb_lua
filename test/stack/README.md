@@ -4,7 +4,7 @@ lua stack
 ```
 $ make -C test
 make: Entering directory 'test'
-cc     stack/stack.c  -llua -lm -o stack/stack
+cc -g    stack/stack.c  -llua -lm -o stack/stack
 make: Leaving directory 'test'
 $ gdb --batch --command test/stack/stack.gdb test/stack/stack
 Breakpoint 1 at 0x1040

@@ -3,7 +3,7 @@
 #include <lauxlib.h>
 
 static int c_obj;
-int c_function(lua_State *_) {}
+static int c_function(lua_State *L) { (void)L; }
 
 int main() {
     lua_State *L = luaL_newstate();

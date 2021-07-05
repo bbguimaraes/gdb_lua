@@ -44,7 +44,18 @@ VERSION_RE = re.compile(r'^"\$LuaVersion: Lua (\d+)\.(\d+)\.(\d+)')
 
 G: typing.Optional['Lua'] = None
 
+class GDBValue(object):
+    def __init__(self, v: gdb.Value):
+        self.v = v
+
 class LuaInitializationFailed(Exception): pass
+class Hash(GDBValue): pass
+class HashNode(GDBValue): pass
+class LuaState(GDBValue): pass
+class StkId(GDBValue): pass
+class TValue(GDBValue): pass
+class Value(GDBValue): pass
+class TString(GDBValue): pass
 
 class RawTypeTag(object):
     __slots__ = ('v',)
@@ -61,20 +72,13 @@ class TypeVariant(object):
     def __init__(self, tt: RawTypeTag):
         self.v = (tt.v >> 4) & 0b11
 
-class GDBValue(object):
-    def __init__(self, v: gdb.Value):
-        self.v = v
-
-class LuaState(GDBValue): pass
-class StkId(GDBValue): pass
-class Hash(GDBValue): pass
-class HashNode(GDBValue): pass
-class TValue(GDBValue): pass
-class Value(GDBValue): pass
-class TString(GDBValue): pass
-
 def idx_or_none(v: typing.Mapping[int, typing.Any], i: int):
     return v[i] if i < len(v) else None
+
+def round_up(i, n):
+    if r := i % n:
+        i += (n - r)
+    return i
 
 def ttype(v: TValue) -> TypeTag: return TypeTag(RawTypeTag(v.v['tt_']))
 def tvalue(v: TValue) -> Value: return Value(v.v['value_'])
@@ -278,7 +282,7 @@ class Lua(object):
         return v.v['n']
 
     def _dump_string(self, v: Value, _tt):
-        return self.string_contents(TString(self.gc(v)['ts'])).cast(self.char_p)
+        return self.string_contents(TString(self.gc(v)['ts']))
 
     def _dump_table(self, v: Value, _tt):
         h = Hash(self.gc(v)['h'])
@@ -326,23 +330,24 @@ class Lua(object):
 class Lua53(Lua):
     def __init__(self):
         super(Lua53, self).__init__()
-        max_size = self.calc_max_size()
+        max_align = self.calc_max_align()
         types = list(map(lookup_type, (('TString', 'Udata'))))
         if not all(types):
             raise LuaInitializationFailed(
                 'failed to find types in debugging info')
         tstring, udata = types
-        self.tstring_size = max(max_size, tstring.sizeof)
-        self.udata_size = max(max_size, udata.sizeof)
+        self.tstring_size = round_up(tstring.sizeof, max_align)
+        self.udata_size = round_up(udata.sizeof, max_align)
 
-    def stkid_to_value(self, v: StkId):
+    def stkid_to_value(self, v: StkId) -> TValue:
         return TValue(v.v.dereference())
     def toboolean(self, v: Value, _tt):
         return v.v['b']
     def isinteger(self, tt: RawTypeTag) -> bool:
         return bool(TypeVariant(tt).v)
     def string_contents(self, s: TString):
-        return self.data_suffix(s.v.address, self.tstring_size)
+        return self.data_suffix(s.v.address, self.tstring_size) \
+            .cast(self.char_p)
     def alimit(self, h: Hash) -> gdb.Value:
         return h.v['sizearray']
     def uv(self, v: gdb.Value) -> tuple[gdb.Value, str]:
@@ -350,7 +355,7 @@ class Lua53(Lua):
     def data_suffix(self, ptr, size):
         return (ptr.cast(self.char_p) + size).cast(self.void_p)
 
-    def calc_max_size(self):
+    def calc_max_align(self):
         # No good way to find this because the types used for alignment are not
         # present in the debug information.
         types = list(map(lookup_type, ('lua_Integer', 'lua_Number')))
@@ -358,7 +363,7 @@ class Lua53(Lua):
             raise LuaInitializationFailed(
                 'failed to find types in debugging info')
         return max(
-            x.sizeof for x in (
+            x.alignof for x in (
                 gdb.lookup_type('double'), gdb.lookup_type('long'),
                 self.void_p, *types))
 
@@ -376,7 +381,7 @@ class Lua54(Lua):
     def isinteger(self, tt: RawTypeTag):
         return not bool(TypeVariant(tt).v)
     def string_contents(self, s: TString):
-        return s.v['contents']
+        return s.v['contents'].dereference().address
     def alimit(self, h: Hash) -> gdb.Value:
         return h.v['alimit']
 
