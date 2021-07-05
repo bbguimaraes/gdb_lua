@@ -49,6 +49,7 @@ class GDBValue(object):
         self.v = v
 
 class LuaInitializationFailed(Exception): pass
+class CFunction(GDBValue): pass
 class Hash(GDBValue): pass
 class HashNode(GDBValue): pass
 class LuaState(GDBValue): pass
@@ -110,6 +111,10 @@ def lookup_type(name: str) -> typing.Optional[gdb.Type]:
     except gdb.error:
         gdb.write(f'type "{name}" not found\n', gdb.STDERR)
     return None
+
+def lookup_fn_loc(f: CFunction) -> tuple[str, int]:
+    sym_line = gdb.find_pc_line(int(f.v))
+    return sym_line.symtab.filename, sym_line.line
 
 def iter_stack(L: LuaState) -> typing.Iterator[StkId]:
     s, t = L.v['stack'] + 1, L.v['top']
@@ -300,10 +305,16 @@ class Lua(object):
             p = v.v.cast(self.lclosure_p)
             return f'lclosure {p}'
         if is_light_cfunction(raw_tt):
-            return f'cfunction {v.v["p"]}'
+            p = v.v['p']
+            if loc := lookup_fn_loc(CFunction(p)):
+                return f'cfunction {p} {loc}'
+            return f'cfunction {p}'
         if is_c_closure(raw_tt):
             cl = self.gc(v)['cl']['c']
-            return f'cclosure {cl["f"]} (nupvalues: {int(cl["nupvalues"])})'
+            cf, nup = cl['f'], int(cl['nupvalues'])
+            if loc := lookup_fn_loc(CFunction(cf)):
+                return f'cclosure {cf} {loc} (nupvalues: {nup})'
+            return f'cclosure {cf} (nupvalues: {nup})'
 
     def _dump_userdata(self, v: Value, _tt):
         u = self.gc(v)['u']

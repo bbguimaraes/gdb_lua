@@ -40,10 +40,10 @@ Lua stack:
   ["E"] = 62,
   ["F"] = 63
 }
-9: 0x555555559990 function cfunction 0x555555555229 <c_function>
-10: 0x5555555599a0 function cclosure 0x555555555229 <c_function> (nupvalues: 1)
+9: 0x555555559990 function cfunction 0x555555555259 <c_function> at stack/stack.c:6
+10: 0x5555555599a0 function cclosure 0x555555555259 <c_function> at stack/stack.c:6 (nupvalues: 1)
 11: 0x5555555599b0 function lclosure 0x55555555ab20
-12: 0x5555555599c0 userdata 0x55555555aea8 (nuvalue: 43, size: 42)
+12: 0x5555555599c0 userdata 0x55555555b258 (nuvalue: 43, size: 42)
 13: 0x5555555599d0 thread 0x5555555592a8
 
 Individual indices:
@@ -74,10 +74,10 @@ table (array_capacity: 8, length: 8, hash_capacity: 8, hash_length: 7) = {
   ["E"] = 62,
   ["F"] = 63
 }
-function cfunction 0x555555555229 <c_function>
-function cclosure 0x555555555229 <c_function> (nupvalues: 1)
+function cfunction 0x555555555259 <c_function> at stack/stack.c:6
+function cclosure 0x555555555259 <c_function> at stack/stack.c:6 (nupvalues: 1)
 function lclosure 0x55555555ab20
-userdata 0x55555555aea8 (nuvalue: 43, size: 42)
+userdata 0x55555555b258 (nuvalue: 43, size: 42)
 thread 0x5555555592a8
 [Inferior 1 (process 294525) exited normally]
 ```
