@@ -1,6 +1,6 @@
 source gdb_lua.py
 break lua_close
-run
+command 1
 echo \nLua stack:\n\n
 lua stack
 echo \nIndividual indices:\n\n
@@ -18,3 +18,5 @@ lua stack L 11
 lua stack L 12
 lua stack L 13
 continue
+end
+run
