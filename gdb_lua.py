@@ -1,5 +1,6 @@
 #!/bin/env python3
 import itertools
+import re
 import sys
 import typing
 
@@ -38,6 +39,8 @@ TYPE_NAMES = (
     'userdata',
     'thread',
 )
+
+VERSION_RE = re.compile(r'^"\$LuaVersion: Lua (\d+)\.(\d+)\.(\d+)')
 
 G: typing.Optional['Lua'] = None
 
@@ -82,16 +85,20 @@ def is_lua_closure(tt: RawTypeTag) -> bool: return TypeVariant(tt).v == 0
 def is_light_cfunction(tt: RawTypeTag) -> bool: return TypeVariant(tt).v == 1
 def is_c_closure(tt: RawTypeTag) -> bool: return TypeVariant(tt).v == 2
 
-def is_lua_53() -> bool:
-    f = 'lua_newuserdatauv'
-    try:
-        gdb.parse_and_eval(f)
-        return False
-    except gdb.error as e:
-        arg = e.args[0]
-        if arg != f'No symbol "{f}" in current context.':
-            raise
-        return True
+def version() -> tuple[int, int, int]:
+    s, _ = gdb.lookup_symbol('lua_ident')
+    if s is None:
+        raise LuaInitializationFailed('failed to lookup `lua_ident`')
+    s = str(s.value())
+    m = VERSION_RE.match(s)
+    if m is None:
+        raise LuaInitializationFailed(
+            f'`lua_ident` does not match expected format: {s}')
+    ret = m.groups()
+    if len(ret) != 3:
+        raise LuaInitializationFailed(
+            f'`lua_ident` does not match expected format: {s}')
+    return int(ret[0]), int(ret[1]), int(ret[2])
 
 def lookup_type(name: str) -> typing.Optional[gdb.Type]:
     try:
@@ -387,10 +394,18 @@ class Lua54(Lua):
 def lua() -> Lua:
     global G
     if G is None:
-        if is_lua_53():
-            G = Lua53()
-        else:
-            G = Lua54()
+        v = version()
+        if v[0] == 5:
+            if v[1] == 3:
+                G = Lua53()
+            elif v[1] == 4:
+                if v[2] <= 1:
+                    G = Lua54_le1()
+                elif v[2] <= 4:
+                    G = Lua54()
+        if G is None:
+            raise LuaInitializationFailed(
+                'unsupported Lua version: ' + '.'.join(map(str, v)))
     return G
 
 def cmd_stack(_, arg: str, _from_tty):
