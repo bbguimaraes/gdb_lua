@@ -243,7 +243,7 @@ class TValuePrinter(object):
     'Printer for tagged values.'
     @classmethod
     def create(cls, val: gdb.Value) -> typing.Optional['TValuePrinter']:
-        if str(val.type) in ('TValue', 'struct TValue'):
+        if str(val.type.unqualified()) in ('TValue', 'struct TValue'):
             return cls(TValue(val))
         return None
 
@@ -258,7 +258,7 @@ class NodeKeyPrinter(object):
     'Printer for hash table nodes.'
     @classmethod
     def create(cls, val: gdb.Value):
-        if str(val.type) in ('NodeKey', 'struct NodeKey'):
+        if str(val.type.unqualified()) in ('NodeKey', 'struct NodeKey'):
             return cls(HashNode(val))
 
     def __init__(self, n: HashNode):
