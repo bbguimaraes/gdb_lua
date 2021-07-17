@@ -1,0 +1,30 @@
+--- makefile
++++ makefile
+@@ -71,7 +71,7 @@
+ 
+ 
+ CC= gcc
+-CFLAGS= -Wall -O2 $(MYCFLAGS) -fno-stack-protector -fno-common -march=native
++CFLAGS= -Wall -O2 $(MYCFLAGS) -fno-stack-protector -fno-common -march=native -fPIC -g
+ AR= ar rc
+ RANLIB= ranlib
+ RM= rm -f
+@@ -83,7 +83,7 @@
+ 
+ LIBS = -lm
+ 
+-CORE_T=	liblua.a
++CORE_T=	liblua.so
+ CORE_O=	lapi.o lcode.o lctype.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o \
+ 	lmem.o lobject.o lopcodes.o lparser.o lstate.o lstring.o ltable.o \
+ 	ltm.o lundump.o lvm.o lzio.o ltests.o
+@@ -107,8 +107,7 @@
+ a:	$(ALL_A)
+ 
+ $(CORE_T): $(CORE_O) $(AUX_O) $(LIB_O)
+-	$(AR) $@ $?
+-	$(RANLIB) $@
++	$(CC) -shared -ldl -Wl,-soname,$(CORE_T) -o $@ $? -lm $(MYLDFLAGS)
+ 
+ $(LUA_T): $(LUA_O) $(CORE_T)
+ 	$(CC) -o $@ $(MYLDFLAGS) $(LUA_O) $(CORE_T) $(LIBS) $(MYLIBS) $(DL)
