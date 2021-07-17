@@ -34,7 +34,9 @@ Versions
 
 Here is a short description of the relevant differences between versions which
 are handled by this extension, for documentation purposes.  See the subclasses
-of `Lua` in [`lua.py`][[lua.py] for the implementation.
+of `Lua` in [`lua.py`][[lua.py] for the implementation.  The Lua version is
+identified at runtime using the `lua_ident` symbol (see [`lapi.c`][lapi.c] in
+the Lua source code).
 
 The lowest version supported is 5.3.6, which understandably differs
 significantly from the 5.4 versions in its internal implementation:
@@ -56,4 +58,5 @@ significantly from the 5.4 versions in its internal implementation:
   5.4, the key is stored first and its fields are broken up so that other node
   fields can be packed together with it.
 
+[lapi.c]: https://github.com/lua/lua/blob/master/lapi.c
 [lua.py]: ./gdb_lua/lua.py

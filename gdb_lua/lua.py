@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import re
 import typing
 
 import gdb
@@ -6,13 +7,27 @@ import gdb
 from . import printing
 from . import types
 
-G: typing.Optional['Lua'] = None
+VERSION_RE = re.compile(r'^"\$LuaVersion: Lua (\d+)\.(\d+)\.(\d+)')
 
-def _is_lua_53():
-    return gdb.lookup_global_symbol('lua_newuserdatauv') is None
+G: typing.Optional['Lua'] = None
 
 def idx_or_none(v: typing.Sequence[typing.Any], i: int):
     return v[i] if i < len(v) else None
+
+def _version() -> tuple[int, int, int]:
+    ss, _ = gdb.lookup_symbol('lua_ident')
+    if ss is None:
+        raise types.LuaInitializationFailed('failed to lookup `lua_ident`')
+    s = str(ss.value())
+    m = VERSION_RE.match(s)
+    if m is None:
+        raise types.LuaInitializationFailed(
+            f'`lua_ident` does not match expected format: {s}')
+    ret = m.groups()
+    if len(ret) != 3:
+        raise types.LuaInitializationFailed(
+            f'`lua_ident` does not match expected format: {s}')
+    return int(ret[0]), int(ret[1]), int(ret[2])
 
 def _iter_stack(L: types.LuaState) -> typing.Iterator[types.StkId]:
     s, t = L.v['stack'] + 1, L.v['top']
@@ -136,8 +151,13 @@ class Lua54(Lua):
 def lua() -> Lua:
     global G
     if G is None:
-        if _is_lua_53():
-            G = Lua53()
-        else:
-            G = Lua54()
+        v = _version()
+        if v[0] == 5:
+            if v[1] == 3:
+                G = Lua53()
+            else:
+                G = Lua54()
+        if G is None:
+            raise types.LuaInitializationFailed(
+                'unsupported Lua version: ' + '.'.join(map(str, v)))
     return G
