@@ -93,6 +93,12 @@ class Lua(object):
     def is_tail(s: types.CallStatus) -> bool:
         raise NotImplementedError()
 
+    def type(_self, t: gdb.Value) -> str:
+        i = int(t)
+        if i == -1:
+            return 'none'
+        return idx_or_none(types.TYPE_NAMES, i) or 'unknown'
+
     def gc(self, v: types.Value) -> types.GC:
         return types.GC(v.v['gc'].cast(self.gc_union_p))
 

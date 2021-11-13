@@ -8,6 +8,9 @@ from . import printing
 from . import types
 
 HELP_LUA = 'Commands to inspect Lua states.'
+HELP_TYPE = ''''\
+Prints the type name corresponding to one of the `LUA_T*` constants.\
+'''
 HELP_STACK = '''\
 Prints the values on the stack associated with a Lua state.
 
@@ -37,6 +40,10 @@ def _make_command(
         Command.invoke = invoke # type: ignore
     Command()
 
+def _cmd_type(_, arg: str, _from_tty):
+    args = gdb.string_to_argv(arg)
+    print(lua.lua().type(gdb.parse_and_eval(' '.join(args))))
+
 def _cmd_stack(_, arg: str, _from_tty):
     args = gdb.string_to_argv(arg)
     lua.lua().dump_stack(
@@ -54,6 +61,9 @@ def _register_printers(obj):
 
 _register_printers(gdb.current_objfile())
 _make_command(HELP_LUA, None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
+_make_command(
+    HELP_TYPE, _cmd_type, 'lua type',
+    gdb.COMMAND_DATA, gdb.COMPLETE_EXPRESSION)
 _make_command(
     HELP_STACK, _cmd_stack, 'lua stack',
     gdb.COMMAND_DATA, gdb.COMPLETE_EXPRESSION)
