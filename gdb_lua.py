@@ -106,7 +106,7 @@ class CallInfo(GDBValue):
         return CallStatus(self.v['callstatus'])
 
 def idx_or_none(v: typing.Sequence[typing.Any], i: int):
-    return v[i] if i < len(v) else None
+    return v[i] if (0 <= i and i < len(v)) else None
 
 def round_up(i, n):
     if r := i % n:
@@ -170,6 +170,8 @@ def iter_stack(L: LuaState) -> typing.Iterator[StkId]:
 
 def stack_idx(L: LuaState, i: int) -> typing.Optional[StkId]:
     s, t = L.v['stack'], L.v['top']
+    if i < 0:
+        return StkId(t + i)
     if 0 < i and i < t - s:
         return StkId(s + i)
     return None
