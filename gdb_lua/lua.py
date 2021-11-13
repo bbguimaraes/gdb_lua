@@ -12,7 +12,7 @@ VERSION_RE = re.compile(r'^"\$LuaVersion: Lua (\d+)\.(\d+)\.(\d+)')
 G: typing.Optional['Lua'] = None
 
 def idx_or_none(v: typing.Sequence[typing.Any], i: int):
-    return v[i] if i < len(v) else None
+    return v[i] if (0 <= i and i < len(v)) else None
 
 def _version() -> tuple[int, int, int]:
     ss, _ = gdb.lookup_symbol('lua_ident')
@@ -37,6 +37,8 @@ def _iter_stack(L: types.LuaState) -> typing.Iterator[types.StkId]:
 
 def _stack_idx(L: types.LuaState, i: int) -> typing.Optional[types.StkId]:
     s, t = L.v['stack'], L.v['top']
+    if i < 0:
+        return types.StkId(t + i)
     if 0 < i and i < t - s:
         return types.StkId(s + i)
     return None
