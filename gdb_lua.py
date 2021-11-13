@@ -7,6 +7,9 @@ import typing
 import gdb
 
 HELP_LUA = 'Commands to inspect Lua states.'
+HELP_TYPE = ''''\
+Prints the type name corresponding to one of the `LUA_T*` constants.\
+'''
 HELP_STACK = '''\
 Prints the values on the stack associated with a Lua state.
 
@@ -303,6 +306,12 @@ class Lua(object):
     def is_tail(s: CallStatus) -> bool:
         raise NotImplementedError()
 
+    def type(_self, t: gdb.Value) -> str:
+        i = int(t)
+        if i == -1:
+            return 'none'
+        return idx_or_none(TYPE_NAMES, i) or 'unknown'
+
     def gc(self, v: Value):
         return v.v['gc'].cast(self.gc_union_p)
 
@@ -507,6 +516,10 @@ def lua() -> Lua:
                 'unsupported Lua version: ' + '.'.join(map(str, v)))
     return G
 
+def cmd_type(_, arg: str, _from_tty):
+    args = gdb.string_to_argv(arg)
+    print(lua().type(gdb.parse_and_eval(' '.join(args))))
+
 def cmd_stack(_, arg: str, _from_tty):
     args = gdb.string_to_argv(arg)
     lua().dump_stack(
@@ -525,6 +538,9 @@ def register_printers(obj):
 if __name__ == '__main__':
     register_printers(gdb.current_objfile())
     make_command(HELP_LUA, None, 'lua', gdb.COMMAND_RUNNING, prefix=True)
+    make_command(
+        HELP_TYPE, cmd_type, 'lua type',
+        gdb.COMMAND_STACK, gdb.COMPLETE_EXPRESSION)
     make_command(
         HELP_STACK, cmd_stack, 'lua stack',
         gdb.COMMAND_DATA, gdb.COMPLETE_EXPRESSION)
