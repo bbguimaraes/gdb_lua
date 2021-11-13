@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-TESTS='backtrace stack'
+TESTS='backtrace stack type'
 
 main() {
     local dir
