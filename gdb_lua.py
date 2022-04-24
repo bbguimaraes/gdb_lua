@@ -332,19 +332,46 @@ class Lua(object):
         gdb.write(f'{TYPE_NAMES[tt.v]} {val.v}\n')
 
     def dump_call_stack(self, L: LuaState):
+        write_c_fn = lambda i, x: \
+            gdb.write(f'  #{i}  {x.function().value().address}\n')
+        frame = gdb.selected_frame()
         l = lua()
         for i, info in enumerate(iter_call_stack(L)):
             if f := StkId(info.v['func']):
                 v = l.stkid_to_value(f)
                 tt = RawTypeTag(v.v['tt_'])
+                f = None
+                if is_c_closure(tt):
+                    f = self.gc(tvalue(v))['cl']['c']['f']
+                elif is_light_cfunction(tt):
+                    f = tvalue(v).v['f']
+                if f is not None:
+                    i = 0
+                    while frame and frame.function().value() != f:
+                        write_c_fn(i, frame)
+                        try:
+                            gdb.write(str(frame.read_var('ci')))
+                            gdb.write('\n')
+                        except:
+                            pass
+                        frame = frame.older()
+                        i += 1
                 gdb.write(f'#{i}  {v.v}')
                 lua_name = getfuncname(self, L, info, tt, v)
                 if lua_name is not None:
                     gdb.write(' ')
                     gdb.write(lua_name)
                 gdb.write('\n')
+                if f is not None:
+                    write_c_fn(0, frame)
+                    frame = frame.older()
             if l.is_tail(info.callstatus()):
                 gdb.write('(... tail calls ...)\n')
+        i = 0
+        while frame:
+            write_c_fn(i, frame)
+            frame = frame.older()
+            i += 1
 
     def dump(self, v: Value, tt: RawTypeTag):
         i = min(TypeTag(tt).v, len(self._DUMP) - 1)
