@@ -137,14 +137,38 @@ class Lua(object):
             if f := self.stkidrel_to_stkid(types.StkIdRel(info.v['func'])):
                 v = l.stkid_to_value(f)
                 tt = types.RawTypeTag(int(v.v['tt_']))
+                f = None
+                if is_c_closure(tt):
+                    f = self.gc(tvalue(v))['cl']['c']['f']
+                elif is_light_cfunction(tt):
+                    f = tvalue(v).v['f']
+                if f is not None:
+                    i = 0
+                    while frame and frame.function().value() != f:
+                        write_c_fn(i, frame)
+                        try:
+                            gdb.write(str(frame.read_var('ci')))
+                            gdb.write('\n')
+                        except:
+                            pass
+                        frame = frame.older()
+                        i += 1
                 gdb.write(f'#{i}  {v.v}')
                 lua_name = _getfuncname(self, L, info, tt, v)
                 if lua_name is not None:
                     gdb.write(' ')
                     gdb.write(lua_name)
                 gdb.write('\n')
+                if f is not None:
+                    write_c_fn(0, frame)
+                    frame = frame.older()
             if l.is_tail(info.callstatus()):
                 gdb.write('(... tail calls ...)\n')
+        i = 0
+        while frame:
+            write_c_fn(i, frame)
+            frame = frame.older()
+            i += 1
 
 class LuaWithoutStkIdRel(object):
     @staticmethod
