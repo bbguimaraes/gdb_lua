@@ -2,7 +2,7 @@ gdb_lua
 =======
 
 A set of custom GDB commands that are useful when working with Lua programs.
-Tested with Lua versions `5.3.6` and `5.4.0` to `5.4.3`.
+Tested with Lua versions `5.3.6` and `5.4.0` to `5.4.4`.
 
 Usage
 -----
