@@ -82,6 +82,9 @@ class Lua(object):
         self.void_p = gdb.lookup_type('void').pointer()
         self.char_p = gdb.lookup_type('char').pointer()
 
+    @staticmethod
+    def stkidrel_to_stkid(v: types.StkIdRel) -> types.StkId:
+        return types.StkId(v.v['p'])
     def stkid_to_value(_self, _v: types.StkId) -> types.TValue:
         raise NotImplementedError()
     def toboolean(_self, _v, _tt) -> bool: raise NotImplementedError()
@@ -116,7 +119,7 @@ class Lua(object):
         gdb.write(f'{types.TYPE_NAMES[tt.v]} {val.v}\n')
 
     def dump_stack_idx(self, L: types.LuaState, i: int):
-        v = _stack_idx(L, i)
+        v = _stack_idx(self, L, i)
         if v is None:
             raise Exception(f'invalid stack index: {i}')
         self._dump_stack_idx(i, v)
@@ -124,14 +127,14 @@ class Lua(object):
     def dump_stack(self, L: types.LuaState, i: typing.Optional[int]=None):
         if i is not None:
             return self.dump_stack_idx(L, int(i))
-        for i, v in enumerate(_iter_stack(L)):
+        for i, v in enumerate(_iter_stack(self, L)):
             gdb.write(f'{i + 1}: {v.v} ')
             self._dump_stack_idx(i, v)
 
     def dump_call_stack(self, L: types.LuaState):
         l = lua()
         for i, info in enumerate(_iter_call_stack(L)):
-            if f := types.StkId(info.v['func']):
+            if f := self.stkidrel_to_stkid(types.StkIdRel(info.v['func'])):
                 v = l.stkid_to_value(f)
                 tt = types.RawTypeTag(int(v.v['tt_']))
                 gdb.write(f'#{i}  {v.v}')
@@ -143,7 +146,12 @@ class Lua(object):
             if l.is_tail(info.callstatus()):
                 gdb.write('(... tail calls ...)\n')
 
-class Lua53(Lua):
+class LuaWithoutStkIdRel(object):
+    @staticmethod
+    def stkidrel_to_stkid(v: types.StkIdRel) -> types.StkId:
+        return types.StkId(v.v)
+
+class Lua53(LuaWithoutStkIdRel, Lua):
     def __init__(self):
         super(Lua53, self).__init__()
         max_align = gdb.lookup_type('L_Umaxalign')
@@ -211,10 +219,12 @@ class Lua54(Lua):
             return types.TValue(n.v['u']), v
         return None
 
-class Lua54_le1(Lua54):
+class Lua54_le1(LuaWithoutStkIdRel, Lua54):
     @staticmethod
     def is_tail(s: types.CallStatus) -> bool:
         return bool(s.v & (1 << 4))
+
+class Lua54_lt5(LuaWithoutStkIdRel, Lua54): pass
 
 def lua() -> Lua:
     global G
@@ -226,6 +236,8 @@ def lua() -> Lua:
             elif v[1] == 4:
                 if v[2] <= 1:
                     G = Lua54_le1()
+                elif v[2] <= 4:
+                    G = Lua54_lt5()
                 else:
                     G = Lua54()
         if G is None:

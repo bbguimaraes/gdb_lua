@@ -2,7 +2,7 @@ gdb_lua
 =======
 
 A set of custom GDB commands that are useful when working with Lua programs.
-Tested with Lua versions `5.3.6` and `5.4.0` to `5.4.4`.
+Tested with Lua versions `5.3.6` and `5.4.0` to `5.4.6`.
 
 Usage
 -----
@@ -64,6 +64,7 @@ The following differences are also handled:
 - A tail call is represented in the `callstatus` field of `struct CallInfo`
   using the fifth least-significant bit in 5.4.0, while every other version
   (including 5.3.6) uses the sixth.
+- Indirection through `StkIdRel` is handled for versions greater than 5.4.4.
 
 [lapi.c]: https://github.com/lua/lua/blob/master/lapi.c
 [lua.py]: ./gdb_lua/lua.py

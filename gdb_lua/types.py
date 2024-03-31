@@ -44,6 +44,7 @@ class GDBValue(object):
 class LuaInitializationFailed(Exception): pass
 class CFunction(GDBValue): pass
 class LuaState(GDBValue): pass
+class StkIdRel(GDBValue): pass
 class StkId(GDBValue): pass
 class TValue(GDBValue): pass
 class Value(GDBValue): pass
