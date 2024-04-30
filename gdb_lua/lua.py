@@ -29,18 +29,26 @@ def _version() -> tuple[int, int, int]:
             f'`lua_ident` does not match expected format: {s}')
     return int(ret[0]), int(ret[1]), int(ret[2])
 
-def _iter_stack(L: types.LuaState) -> typing.Iterator[types.StkId]:
-    s, t = L.v['stack'] + 1, L.v['top']
+def _stack(lua: 'Lua', L: types.LuaState) -> types.StkId:
+    return lua.stkidrel_to_stkid(types.StkIdRel(L.v['stack']))
+
+def _stack_top(lua: 'Lua', L: types.LuaState) -> types.StkId:
+    return lua.stkidrel_to_stkid(types.StkIdRel(L.v['top']))
+
+def _iter_stack(lua: 'Lua', L: types.LuaState) -> typing.Iterator[types.StkId]:
+    s, t = _stack(lua, L).v + 1, _stack_top(lua, L).v
     while s != t:
         yield types.StkId(s)
         s += 1
 
-def _stack_idx(L: types.LuaState, i: int) -> typing.Optional[types.StkId]:
-    s, t = L.v['stack'], L.v['top']
+def _stack_idx(lua: 'Lua', L: types.LuaState, i: int) \
+    -> typing.Optional[types.StkId] \
+:
+    s, t = _stack(lua, L), _stack_top(lua, L)
     if i < 0:
-        return types.StkId(t + i)
-    if 0 < i and i < t - s:
-        return types.StkId(s + i)
+        return types.StkId(t.v + i)
+    if 0 < i and i < t.v - s.v:
+        return types.StkId(s.v + i)
     return None
 
 def _iter_call_stack(L: types.LuaState) -> typing.Iterator[types.CallInfo]:
